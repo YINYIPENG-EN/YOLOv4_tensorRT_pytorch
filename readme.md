@@ -130,5 +130,9 @@ FPS测试：
 python predict.py --weights model_data/yolov4.engine --fps
 ```
 
+权重
+链接：https://pan.baidu.com/s/1mlBMuiKqH3glZPqFGunXmw 
+提取码：yypn
+
 说明：暂时未添加动态输入功能
 
