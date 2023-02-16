@@ -37,9 +37,12 @@ class YOLO(object):
         else:
             return "Unrecognized attribute name '" + n + "'"
 
-    def __init__(self, model_path, input_shape=None, confidence=0.5, nms_iou=0.4, ONNX=False, TRT=False, **kwargs):
+    def __init__(self, model_path, input_shape=None, confidence=0.5, nms_iou=0.4, ONNX=False, TRT=False, audio=False,
+                 audio_class=None, **kwargs):
         if input_shape is None:
             input_shape = [608, 608]
+        self.audio = audio
+        self.audio_class = audio_class
         self.ONNX = ONNX
         self.TRT = TRT
         self.model_path = model_path
@@ -75,7 +78,7 @@ class YOLO(object):
                 self.net = self.net.cuda()
         LOGGER.info('{} model, anchors, and classes loaded.'.format(self.model_path))
 
-    def detect_image(self, image, crop=False):
+    def detect_image(self, image, infor_dict, crop=False):
         with torch.no_grad():
             image0 = image
             image_shape = image.shape[:2]  # get image shape
@@ -122,7 +125,12 @@ class YOLO(object):
         #   draw results
         # ---------------------------------------------------------#
         for i, c in list(enumerate(top_label)):
-            predicted_class = self.class_names[int(c)]
+            predicted_class = self.class_names[int(c)]  # 获取类名
+            if self.audio and predicted_class in [self.audio_class]:  # 是否开启语音功能以及判断预警类别
+                infor_dict['res_class'] = True  # 如果有要识别的类，那么res_class为True
+                infor_dict['class'] = predicted_class  # 记录该类
+            elif self.audio and predicted_class not in [self.audio_class]:
+                infor_dict['res_class'] = False
             box = top_boxes[i]
             score = top_conf[i]
 
@@ -137,7 +145,7 @@ class YOLO(object):
             draw = ImageDraw.Draw(image0)
             label_size = draw.textsize(label, font)
             label = label.encode('utf-8')
-            print(label, top, left, bottom, right)
+            # print(label, top, left, bottom, right)
 
             if top - label_size[1] >= 0:
                 text_origin = np.array([left, top - label_size[1]])

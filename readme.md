@@ -130,6 +130,24 @@ FPS测试：
 python predict.py --weights model_data/yolov4.engine --fps
 ```
 
+# 新增报警功能
+
+**2023.02.16 新增语音报警功能**
+
+采用多进程实现语音报警功能
+
+具体的代码实现参考utils/audio_recognize.py
+
+在上述**视频**推理(**不支持图片报警**)中加入参数--audio即可开起功能，如果需要指定类进行报警，可指定audio_class
+
+例如对person这个类进行报警
+
+```shell
+python predict.py --weights model_data/yolov4.engine --video --video_path 0 --audio --audio_class person
+```
+
+
+
 权重
 链接：https://pan.baidu.com/s/1mlBMuiKqH3glZPqFGunXmw 
 提取码：yypn
