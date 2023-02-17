@@ -13,6 +13,7 @@ from utils.utils_bbox import DecodeBox
 from utils.augmentations import letterbox
 from loguru import logger as LOGGER
 
+from utils.tracking_utils import target_tracking
 
 class YOLO(object):
     _defaults = {
@@ -37,9 +38,12 @@ class YOLO(object):
         else:
             return "Unrecognized attribute name '" + n + "'"
 
-    def __init__(self, model_path, input_shape=None, confidence=0.5, nms_iou=0.4, ONNX=False, TRT=False, **kwargs):
+    def __init__(self, model_path, input_shape=None, confidence=0.5, nms_iou=0.4, ONNX=False, TRT=False, audio=False,
+                 audio_class=None, **kwargs):
         if input_shape is None:
             input_shape = [608, 608]
+        self.audio = audio
+        self.audio_class = audio_class
         self.ONNX = ONNX
         self.TRT = TRT
         self.model_path = model_path
@@ -60,6 +64,7 @@ class YOLO(object):
         self.colors = list(map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)), self.colors))
         self.generate()
 
+
     # create model
     def generate(self):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -75,7 +80,7 @@ class YOLO(object):
                 self.net = self.net.cuda()
         LOGGER.info('{} model, anchors, and classes loaded.'.format(self.model_path))
 
-    def detect_image(self, image, crop=False):
+    def detect_image(self, image, infor_dict, target_dict=None, track_index=0, crop=False):
         with torch.no_grad():
             image0 = image
             image_shape = image.shape[:2]  # get image shape
@@ -105,7 +110,7 @@ class YOLO(object):
                                                          nms_thres=self.nms_iou)
 
             if results[0] is None:
-                return image0
+                return image0, target_dict, track_index
 
             top_label = np.array(results[0][:, 6], dtype='int32')
             top_conf = results[0][:, 4] * results[0][:, 5]
@@ -121,36 +126,46 @@ class YOLO(object):
         # ---------------------------------------------------------#
         #   draw results
         # ---------------------------------------------------------#
+
         for i, c in list(enumerate(top_label)):
-            predicted_class = self.class_names[int(c)]
+            predicted_class = self.class_names[int(c)]  # 获取类名
+            if self.audio and predicted_class in [self.audio_class]:  # 是否开启语音功能以及判断预警类别
+                infor_dict['res_class'] = True  # 如果有要识别的类，那么res_class为True
+                infor_dict['class'] = predicted_class  # 记录该类
+            elif self.audio and predicted_class not in [self.audio_class]:
+                infor_dict['res_class'] = False
             box = top_boxes[i]
             score = top_conf[i]
 
             top, left, bottom, right = box
 
-            top = max(0, np.floor(top).astype('int32'))
-            left = max(0, np.floor(left).astype('int32'))
-            bottom = min(image0.size[1], np.floor(bottom).astype('int32'))
-            right = min(image0.size[0], np.floor(right).astype('int32'))
+            top = max(0, np.floor(top).astype('int32'))  # y1
+            left = max(0, np.floor(left).astype('int32'))  # x1
+            bottom = min(image0.size[1], np.floor(bottom).astype('int32'))  # y2
+            right = min(image0.size[0], np.floor(right).astype('int32'))  # x2
 
             label = '{} {:.2f}'.format(predicted_class, score)
             draw = ImageDraw.Draw(image0)
             label_size = draw.textsize(label, font)
             label = label.encode('utf-8')
-            print(label, top, left, bottom, right)
+            # print(label, top, left, bottom, right)
 
             if top - label_size[1] >= 0:
                 text_origin = np.array([left, top - label_size[1]])
             else:
                 text_origin = np.array([left, top + 1])
-
+            # 跟踪记录坐标点
+            if infor_dict['track'] and predicted_class in [infor_dict['track_class']]:
+                track_coor = []
+                track_coor.append((left, top, right, bottom, score))
+                target_dict, track_index = target_tracking(track_coor, target_dict, track_index)
             for i in range(thickness):
                 draw.rectangle((left + i, top + i, right - i, bottom - i), outline=self.colors[c])
             draw.rectangle((tuple(text_origin), tuple(text_origin + label_size)), fill=self.colors[c])
             draw.text(text_origin, str(label, 'UTF-8'), fill=(0, 0, 0), font=font)
             del draw
 
-        return image0
+        return image0, target_dict, track_index
 
     def get_FPS(self, image, test_interval):
         image_shape = np.array(np.shape(image)[0:2])
