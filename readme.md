@@ -1,5 +1,5 @@
 ```
-git clone https://github.com/YINYIPENG-EN/YOLOv4_tensorRT_pytorch.git
+git clone --branch v2.0 https://github.com/YINYIPENG-EN/YOLOv4_tensorRT_pytorch.git
 ```
 
 # torch2onnx
